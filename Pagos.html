@@ -1,0 +1,1067 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>OK Eventos — Cloud</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<!-- Firebase (compat) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+<style>
+:root{ --bg:#F5F4F0; --card:#fff; --text:#222629; --muted:#6B7280; --gold-1:#F2D15F; --gold-2:#CFA33C; }
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Poppins,system-ui,Arial,sans-serif}
+.wrap{max-width:1240px;margin:22px auto;padding:16px}
+header{display:flex;gap:14px;align-items:center;margin-bottom:12px}
+header img{width:68px;height:68px;border-radius:12px;object-fit:cover}
+h1{font-size:20px;margin:0}
+.small{font-size:13px;color:var(--muted)}
+.card{background:var(--card);border-radius:12px;box-shadow:0 8px 20px rgba(0,0,0,.06);padding:14px}
+input,select,button{font-family:inherit}
+input[type="text"],input[type="date"],input[type="number"],input[type="url"],input[type="email"],input[type="password"],select{width:100%;padding:10px;border:1px solid #e9e9e9;border-radius:8px;margin:6px 0 10px;background:#fff}
+button{ color:#111;border:none;border-radius:10px;padding:10px 12px;cursor:pointer;
+  background-image:linear-gradient(180deg,var(--gold-1),var(--gold-2));
+  box-shadow:0 1px 0 rgba(0,0,0,.05), inset 0 .5px rgba(255,255,255,.6);
+}
+button:hover{filter:saturate(1.05) brightness(1.02)}
+button[disabled]{opacity:.6;cursor:not-allowed}
+button.ghost{background:#eee;color:#333;box-shadow:none}
+.row{display:flex;gap:12px;flex-wrap:wrap}
+.col{flex:1 1 340px}
+.list{max-height:340px;overflow:auto;border:1px dashed #eee;border-radius:10px;padding:8px}
+.item{display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px dashed #f0f0f0}
+.inline{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.total{font-weight:700}
+.qty{width:84px} .price{width:120px}
+.tabs{display:flex;gap:6px;border-bottom:2px solid #e8e8e8;margin:10px 0 14px}
+.tab{padding:10px 12px;border-radius:10px 10px 0 0;background:#ecebe6;cursor:pointer;font-weight:600}
+.tab.active{background:#fff;border:1px solid #e8e8e8;border-bottom:none}
+.tabpanel{display:none} .tabpanel.active{display:block}
+.drop{border:2px dashed #cfcfcf;border-radius:12px;padding:16px;text-align:center;background:#fff}
+.drop.drag{border-color:var(--gold-2);background:#fff8e6}
+.media-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px}
+.media{border:1px solid #eee;border-radius:10px;padding:6px;display:flex;flex-direction:column;gap:6px;align-items:center}
+.media img{max-width:100%;max-height:90px;object-fit:cover;border-radius:8px}
+.link{color:#0b66ff;text-decoration:underline;cursor:pointer;font-size:13px}
+.badge{font-size:11px;border:1px solid #e9e9e9;border-radius:999px;padding:2px 8px;margin-left:6px;background:#fafafa}
+
+/* Panel / modal */
+#evPanelBk{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:flex-start;justify-content:center;z-index:60}
+#evPanel{background:#fff;border-radius:14px;margin-top:24px;padding:16px;max-width:1100px;width:95%;max-height:88vh;overflow:auto}
+.panelHead{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.close{background:#efefef;color:#222}
+.err{color:#b00020;font-weight:600}
+
+/* Subtabs provincia */
+.subtabs{display:flex;gap:8px;margin:8px 0 6px}
+.subtabs .chip{padding:6px 10px;border-radius:999px;border:1px solid #e8e8e8;background:#f7f7f5;cursor:pointer;font-weight:600}
+.subtabs .chip.active{background:#fff;border-color:#d9d9d9;box-shadow:0 1px 0 rgba(0,0,0,.04)}
+
+/* AUTH overlay */
+#authBk{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:80}
+#authCard{background:#fff;border-radius:16px;padding:18px;max-width:480px;width:92%}
+.auth-tabs{display:flex;gap:6px;margin-bottom:10px}
+.auth-tabs .chip{padding:8px 12px;border-radius:999px;background:#f7f7f7;border:1px solid #e8e8e8;cursor:pointer;font-weight:600}
+.auth-tabs .chip.active{background:#fff}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <img id="logoPreview" src="https://placehold.co/300x300/ffffff/333333?text=OK+EVENTOS" alt="Logo" />
+    <div style="flex:1">
+      <h1>OK Eventos — Cloud</h1>
+      <div class="small" id="saveMode">Modo invitado (local)</div>
+      <div class="inline">
+        <input type="file" id="logoFile" accept="image/*" />
+        <button class="ghost" id="logoGuardar" type="button">Guardar logo</button>
+        <span class="small" id="logoStatus">Logo temporal</span>
+        <span class="small" style="margin-left:auto">Cuenta: <b id="who">—</b></span>
+        <button class="ghost" id="btnAuth">Iniciar sesión</button>
+        <button class="ghost" id="btnLogout" style="display:none">Cerrar sesión</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="evNew">Eventos</div>
+    <div class="tab" data-tab="ex">Catálogo de Extras</div>
+    <div class="tab" data-tab="evList">Eventos creados</div>
+  </div>
+
+  <!-- ===== Crear evento ===== -->
+  <div id="tab-evNew" class="tabpanel active">
+    <div class="row">
+      <div class="col">
+        <div class="card">
+          <h3 style="margin:0 0 6px">Crear evento</h3>
+
+          <form id="evForm" autocomplete="off">
+            <label>Tipo de evento</label>
+            <select id="evType">
+              <option value="15 años">Cumple de 15</option>
+              <option value="18 años">Cumple de 18</option>
+              <option value="Casamiento">Casamiento</option>
+              <option value="Fiesta de Egresados">Fiesta de egresados</option>
+              <option value="Otro">Otro</option>
+            </select>
+
+            <label>Nombre / título <span class="err" id="errName"></span></label>
+            <input required type="text" id="evName" placeholder="Ej: 15 de Estefy / Promo 2026" />
+
+            <div class="row">
+              <div class="col">
+                <label>Fecha <span class="err" id="errDate"></span></label>
+                <input type="date" id="evDate" />
+              </div>
+              <div class="col">
+                <label>Personas <span class="err" id="errPeople"></span></label>
+                <input required type="number" id="evPeople" min="1" value="100" inputmode="numeric" />
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="col">
+                <label>Precio por persona (cierre) <span class="err" id="errPrice"></span></label>
+                <input required type="text" id="evPricePer" placeholder="Ej: 15000" inputmode="decimal" />
+              </div>
+              <div class="col">
+                <label>Provincia</label>
+                <select id="evProvince">
+                  <option>San Juan</option>
+                  <option>Mendoza</option>
+                </select>
+              </div>
+            </div>
+
+            <label>Salón (opcional)</label>
+            <input type="text" id="evSalon" placeholder="Ej: Salón Imperial / La Finca" />
+
+            <label>Opción (paquete/plan del evento)</label>
+            <input type="text" id="evOption" placeholder="Ej: Opción Dorada / Paquete Full" />
+
+            <div class="small" id="evBasePreview">Total base estimado: $ 0,00</div>
+            <div class="inline" style="justify-content:flex-end;margin-top:8px">
+              <button id="evCreate" type="submit">Crear evento</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="col">
+        <div class="card">
+          <h3 style="margin:0 0 6px">Extras/Combos para el NUEVO evento</h3>
+          <label>Elegir ítem</label>
+          <select id="newExFor"><option value="">-- elegir extra o combo --</option></select>
+          <div class="inline">
+            <input type="number" id="newExQty" class="qty" min="1" value="1" />
+            <input type="text" id="newExPrice" class="price" placeholder="Precio (opcional)" />
+            <button id="newAddEx" type="button">Agregar</button>
+          </div>
+          <div class="small">Si ponés precio aquí, reemplaza el del catálogo <b>solo</b> para este evento.</div>
+
+          <h4 style="margin:10px 0 6px">Ítems</h4>
+          <div id="newExList" class="list"></div>
+          <div class="inline" style="justify-content:space-between;margin-top:8px">
+            <div class="small">Total ítems: <span class="total" id="newExTotal">$ 0,00</span></div>
+            <button class="ghost" id="newClear" type="button">Vaciar</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="col">
+        <div class="card">
+          <h3 style="margin:0 0 6px">Resumen</h3>
+          <div class="small">Base (personas × precio cierre): <b id="newSumBase">$ 0,00</b></div>
+          <div class="small">Extras/Combos: <b id="newSumExtras">$ 0,00</b></div>
+          <div class="small">TOTAL: <b id="newSumTotal" class="total">$ 0,00</b></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Catálogo ===== -->
+  <div id="tab-ex" class="tabpanel">
+    <div class="row">
+      <div class="col">
+        <div class="card">
+          <h3 style="margin:0 0 6px">Nuevo — Extra o Combo</h3>
+          <div class="inline" style="gap:10px">
+            <div style="flex:1">
+              <label>Tipo</label>
+              <select id="exType">
+                <option value="extra">Extra</option>
+                <option value="combo">Combo</option>
+              </select>
+            </div>
+            <div style="flex:2">
+              <label>Nombre</label>
+              <input type="text" id="exName" placeholder="Ej: Combo 1 / Candy Bar" />
+            </div>
+            <div style="flex:1">
+              <label>Precio</label>
+              <input type="text" id="exPrice" placeholder="Ej: 90000" inputmode="decimal" />
+            </div>
+          </div>
+          <button id="exCreate" type="button">Guardar</button>
+        </div>
+
+        <div class="card">
+          <h3 style="margin:0 0 6px">Archivos del ítem</h3>
+          <label>Elegir ítem</label>
+          <select id="exSelectFiles"><option value="">-- elegir extra o combo --</option></select>
+
+          <div id="drop" class="drop" style="margin-top:6px">
+            Arrastrá y soltá PNG/JPG/PDF (máx. ~900 KB c/u) o
+            <input type="file" id="fileInput" multiple accept="image/*,application/pdf" style="margin-left:6px" />
+          </div>
+          <div class="inline" style="margin-top:6px">
+            <button id="btnUpload" type="button" class="ghost">Subir seleccionados</button>
+            <span class="small">Si pesan más, pegá un enlace:</span>
+          </div>
+          <div class="inline">
+            <input type="url" id="exLink" placeholder="https://drive.google.com/..." />
+            <button id="btnAddLink" type="button" class="ghost">Guardar enlace</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="col">
+        <div class="card">
+          <h3 style="margin:0 0 6px">Catálogo</h3>
+          <div id="exList" class="list"></div>
+        </div>
+        <div class="card">
+          <h3 style="margin:0 0 6px">Galería del ítem</h3>
+          <div id="exMedia" class="media-grid"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Eventos creados ===== -->
+  <div id="tab-evList" class="tabpanel">
+    <div class="card">
+      <h3 style="margin:0 0 6px">Buscar evento</h3>
+      <input type="text" id="evSearch" placeholder="Escribí el nombre...">
+
+      <div class="subtabs">
+        <div class="chip active" data-prov="San Juan">San Juan</div>
+        <div class="chip" data-prov="Mendoza">Mendoza</div>
+        <div class="chip" data-prov="Todos">Todos</div>
+      </div>
+
+      <div id="evList" class="list" style="margin-top:8px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Panel de detalle ===== -->
+<div id="evPanelBk">
+  <div id="evPanel">
+    <div class="panelHead">
+      <div>
+        <div style="font-weight:700" id="pEvName">Evento</div>
+        <div class="small" id="pEvMeta">Tipo • Fecha</div>
+      </div>
+      <div class="inline">
+        <button id="pDelete" class="ghost" title="Eliminar evento">Eliminar</button>
+        <button id="pClose" class="close">Cerrar</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col">
+        <div class="card">
+          <h3 style="margin:0 0 6px">Asignar extras/combos</h3>
+          <label>Elegir ítem</label>
+          <select id="exForEvent"><option value="">-- elegir extra o combo --</option></select>
+          <div class="inline">
+            <input type="number" id="exQty" class="qty" min="1" value="1" />
+            <input type="text" id="exPriceOverride" class="price" placeholder="Precio (opcional)" />
+            <button id="addExtraToEvent" type="button">Agregar</button>
+          </div>
+          <div class="small">Si ponés precio aquí, reemplaza el del catálogo <b>solo</b> para este evento.</div>
+
+          <h4 style="margin:10px 0 6px">Ítems del evento</h4>
+          <div id="evExtrasList" class="list"></div>
+          <div class="inline" style="justify-content:space-between;margin-top:8px">
+            <div class="small">Total ítems: <span class="total" id="evExtrasTotal">$ 0,00</span></div>
+            <button class="ghost" id="evClearExtras" type="button">Vaciar ítems</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="col">
+        <div class="card">
+          <h3 style="margin:0 0 6px">Registrar pago (comprobante obligatorio)</h3>
+          <label>Cliente</label>
+          <input type="text" id="payClient" placeholder="Nombre del cliente" />
+          <label>Monto</label>
+          <input type="text" id="payAmount" inputmode="decimal" placeholder="Ej: 100000" />
+          <label>Método</label>
+          <select id="payMethod"><option>Efectivo</option><option>Mercado Pago</option><option>Otro</option></select>
+          <label>Comprobante</label>
+          <div class="inline">
+            <input type="file" id="payProof" accept="image/*,application/pdf" />
+            <button id="payUpload" type="button" class="ghost">Usar archivo (≤1.8 MB)</button>
+          </div>
+          <div class="inline">
+            <input type="url" id="payProofLink" placeholder="o pegá un enlace http(s) a PDF/imagen" />
+            <button id="payUseLink" type="button" class="ghost">Usar enlace</button>
+            <span class="small" id="proofStatus">Sin comprobante</span>
+          </div>
+          <div class="inline" style="justify-content:space-between;margin-top:8px">
+            <button id="paySave" type="button">Registrar pago</button>
+            <button id="btnGeneralReceipt" type="button" class="ghost" title="Recibo general del evento">Recibo general</button>
+          </div>
+          <div class="small" style="margin-top:8px">Pagado total: <b id="payTotal">$ 0,00</b></div>
+        </div>
+
+        <div class="card">
+          <h3 style="margin:0 0 6px">Precio por persona y aumentos</h3>
+          <div class="inline">
+            <input type="text" id="newPricePer" placeholder="Nuevo precio por persona" inputmode="decimal" />
+            <button id="btnReprice" type="button">Actualizar precio</button>
+          </div>
+          <div class="small">
+            Aplica solo sobre lo <b>pendiente</b>. Lo ya pagado queda congelado.<br>
+            (Ej.: 100 personas · $1 c/u. Si ya pagaron 50 y sube a $2, se ajustan las otras 50 → saldo +$100)
+          </div>
+          <div class="inline" style="margin-top:10px">
+            <input type="text" id="adjPercent" placeholder="% (ej: 10)" inputmode="decimal" />
+            <span class="small">o</span>
+            <input type="text" id="adjAmount" placeholder="Monto fijo" inputmode="decimal" />
+            <span class="small">o</span>
+            <input type="text" id="adjPerHead" placeholder="Aumento por persona" inputmode="decimal" />
+            <button id="adjApply" type="button">Aplicar ajuste</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="col">
+        <div class="card">
+          <h3 style="margin:0 0 6px">Resumen</h3>
+          <div class="small">Salón: <b id="sumSalon">—</b></div>
+          <div class="small">Personas: <b id="sumPeople">0</b></div>
+          <div class="small">Precio cierre por persona (actual): <b id="sumPricePer">$ 0,00</b></div>
+          <div class="small">Total base: <b id="sumBase">$ 0,00</b></div>
+          <div class="small">Ajustes: <b id="sumAdj">$ 0,00</b></div>
+          <div class="small">Extras/Combos: <b id="sumExtras">$ 0,00</b></div>
+          <div class="small">Total: <b id="sumTotal" class="total">$ 0,00</b></div>
+          <div class="small">Pagado: <b id="sumPaid">$ 0,00</b></div>
+          <div class="small">Saldo: <b id="sumRemain" class="total">$ 0,00</b></div>
+          <div class="inline" style="margin-top:8px">
+            <input type="text" id="editSalon" placeholder="Editar salón" />
+            <button id="saveSalon" class="ghost" type="button">Guardar salón</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3 style="margin:0 0 6px">Pagos del evento</h3>
+          <div id="payList" class="list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== AUTH ===== -->
+<div id="authBk">
+  <div id="authCard" class="card">
+    <div class="auth-tabs">
+      <div class="chip active" data-auth="login">Iniciar sesión</div>
+      <div class="chip" data-auth="register">Crear cuenta</div>
+    </div>
+    <div id="authLogin">
+      <label>Email</label><input id="alEmail" type="email" placeholder="tu@email.com">
+      <label>Contraseña</label><input id="alPass" type="password" placeholder="mín. 6 caracteres">
+      <div class="inline" style="justify-content:space-between">
+        <button id="doLogin">Entrar</button>
+        <button id="doGoogle" class="ghost">Entrar con Google</button>
+        <button id="closeAuth" class="ghost">Cancelar</button>
+      </div>
+    </div>
+    <div id="authReg" style="display:none">
+      <label>Email</label><input id="arEmail" type="email">
+      <label>Contraseña</label><input id="arPass" type="password">
+      <div class="inline" style="justify-content:space-between">
+        <button id="doRegister">Crear cuenta</button>
+        <button id="closeAuth2" class="ghost">Cancelar</button>
+      </div>
+    </div>
+    <div class="small" id="authMsg"></div>
+  </div>
+</div>
+
+<script>
+/* ===== Firebase ===== */
+// 🔴 Pega tu configuración aquí:
+const FIREBASE_CONFIG = {
+  apiKey: "TU_API_KEY",
+  authDomain: "TU_AUTH_DOMAIN",
+  projectId: "TU_PROJECT_ID",
+  storageBucket: "TU_STORAGE_BUCKET",
+  messagingSenderId: "TU_SENDER_ID",
+  appId: "TU_APP_ID"
+};
+firebase.initializeApp(FIREBASE_CONFIG);
+const auth = firebase.auth();
+const db   = firebase.firestore();
+
+/* ===== Utilidades ===== */
+const money = n => '$ ' + Number(n||0).toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2});
+const num = (v)=>{ const s=(''+(v??'')).replace(/\./g,'').replace(',', '.').replace(/[^\d.-]/g,''); const n=parseFloat(s); return isNaN(n)?0:n; };
+const isHttp = (u)=> u && /^https?:\/\//i.test(u);
+const uid = ()=>'id_'+Math.random().toString(36).slice(2)+Date.now();
+const isAuthed = ()=> !!(auth.currentUser && auth.currentUser.uid);
+const UCOL = (path)=> db.collection('users').doc(auth.currentUser.uid).collection(path);
+
+/* ===== Storage local (backup offline) ===== */
+const K = { EVENTS:'ok_ev_events', EXTRAS:'ok_ev_extras', MEDIA:'ok_ev_media', PAYSEQ:'ok_ev_payseq', LOGO:'ok_logo' };
+const store = { get:(k,def)=>{ try{ return JSON.parse(localStorage.getItem(k)||JSON.stringify(def)); }catch{ return def; } }, set:(k,v)=> localStorage.setItem(k, JSON.stringify(v)) };
+
+/* ===== Logo local ===== */
+const logoPreview = document.getElementById('logoPreview');
+const logoFile = document.getElementById('logoFile');
+const logoGuardar = document.getElementById('logoGuardar');
+const logoStatus = document.getElementById('logoStatus');
+(function(){ const saved=localStorage.getItem(K.LOGO); if(saved){ logoPreview.src=saved; logoStatus.textContent='Logo guardado'; }})();
+logoFile.addEventListener('change', ()=>{ if(!logoFile.files?.length) return; const f=logoFile.files[0]; const r=new FileReader(); r.onload=()=>{ logoPreview.src=r.result; logoStatus.textContent='Logo listo (sin guardar)'; }; r.readAsDataURL(f); });
+logoGuardar.addEventListener('click', ()=>{ try{ localStorage.setItem(K.LOGO, logoPreview.src); logoStatus.textContent='Logo guardado'; }catch(e){ alert('No se pudo guardar el logo.'); }});
+
+/* ===== Tabs ===== */
+document.querySelectorAll('.tab').forEach(t=>{
+  t.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+                 document.querySelectorAll('.tabpanel').forEach(x=>x.classList.remove('active'));
+                 t.classList.add('active'); document.getElementById('tab-'+t.dataset.tab).classList.add('active');};
+});
+
+/* ===== Semillas catálogo ===== */
+const BASE_EXTRAS = [
+  {type:'extra', name:"Chispas Frías X2", price:79000},{type:'extra', name:"Candy Bar / Candy Golosinas", price:79000},
+  {type:'extra', name:"Decoración de Mesa Principal", price:90000},{type:'extra', name:"Decoración de Salón con Telas", price:95000},
+  {type:'extra', name:"Sillón de Quinceañera", price:95000},{type:'extra', name:"Candy Glitter", price:95000},
+  {type:'extra', name:"Decoración Tras Mesa Principal", price:95000},{type:'extra', name:"Túnel de Luces", price:100000},
+  {type:'extra', name:"Letras Luminosas", price:105000},{type:'extra', name:"Living para 100 personas", price:120000},
+  {type:'extra', name:"Pantalla y Proyector", price:135000},{type:'extra', name:"Barra Tropical con y sin Alcohol", price:145000},
+  {type:'extra', name:"Altar Civil", price:145000},{type:'extra', name:"Centro de Mesas x 10U", price:150000},
+  {type:'extra', name:"Cotillón para Fiestas", price:150000},{type:'extra', name:"Cámara 360", price:165000},
+  {type:'extra', name:"Robot Led", price:225000},{type:'extra', name:"Cabina Fotográfica", price:225000},
+  {type:'extra', name:"Fondo para Fotos", price:225000},{type:'extra', name:"Fuegos Artificiales", price:350000},
+  {type:'extra', name:"Fotografía", price:354000},{type:'extra', name:"Video", price:354000},
+];
+const BASE_COMBOS = [
+  {type:'combo', name:"EXTRAS COMBO – N°1", price:530000},
+  {type:'combo', name:"EXTRAS COMBO – N°1 (B)", price:390000},
+  {type:'combo', name:"EXTRAS COMBO – N°2", price:885000},
+  {type:'combo', name:"EXTRAS COMBO – N°2 (B)", price:750000},
+  {type:'combo', name:"EXTRAS COMBO – N°3", price:950000},
+];
+
+/* ===== Estado ===== */
+let extras = store.get(K.EXTRAS, []);
+if(!extras.length){ extras=[...BASE_EXTRAS, ...BASE_COMBOS].map(e=>({id:uid(), ...e})); store.set(K.EXTRAS, extras); }
+let events = store.get(K.EVENTS, []);
+let mediaMap = store.get(K.MEDIA, {});
+let paySeqLocal = store.get(K.PAYSEQ, 0);
+function nextSeqLocal(){ paySeqLocal++; store.set(K.PAYSEQ, paySeqLocal); return String(paySeqLocal).padStart(12,'0'); }
+
+/* ===== Refs UI ===== */
+const saveMode = document.getElementById('saveMode'); const who = document.getElementById('who');
+const btnAuth = document.getElementById('btnAuth'); const btnLogout = document.getElementById('btnLogout');
+const authBk = document.getElementById('authBk'); const authMsg = document.getElementById('authMsg');
+const alEmail = document.getElementById('alEmail'), alPass = document.getElementById('alPass');
+const arEmail = document.getElementById('arEmail'), arPass = document.getElementById('arPass');
+const doLogin = document.getElementById('doLogin'), doRegister=document.getElementById('doRegister'), doGoogle=document.getElementById('doGoogle');
+document.querySelectorAll('.auth-tabs .chip').forEach(ch=> ch.onclick=()=> switchAuthTab(ch.dataset.auth));
+document.getElementById('closeAuth').onclick=()=>authBk.style.display='none';
+document.getElementById('closeAuth2').onclick=()=>authBk.style.display='none';
+btnAuth.onclick=()=>{ authBk.style.display='flex'; switchAuthTab('login'); };
+btnLogout.onclick=()=> auth.signOut();
+
+function switchAuthTab(which){
+  document.querySelectorAll('.auth-tabs .chip').forEach(x=>x.classList.toggle('active', x.dataset.auth===which));
+  document.getElementById('authLogin').style.display = which==='login'?'block':'none';
+  document.getElementById('authReg').style.display   = which==='register'?'block':'none';
+  authMsg.textContent='';
+}
+doLogin.onclick = async ()=>{ try{ await auth.signInWithEmailAndPassword(alEmail.value.trim(), alPass.value); authBk.style.display='none'; }catch(e){ authMsg.textContent=e.message; } };
+doRegister.onclick = async ()=>{ try{ await auth.createUserWithEmailAndPassword(arEmail.value.trim(), arPass.value); authBk.style.display='none'; }catch(e){ authMsg.textContent=e.message; } };
+doGoogle.onclick = async ()=>{ try{ await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); authBk.style.display='none'; }catch(e){ authMsg.textContent=e.message; } };
+
+let unsubEvents=null, unsubExtras=null, unsubMedia=null;
+
+/* ===== Auth watcher: sincroniza Firestore <-> UI ===== */
+auth.onAuthStateChanged(async (user)=>{
+  if(user){
+    who.textContent = user.email||user.uid;
+    saveMode.textContent = 'Guardado en la cuenta (nube)';
+    btnAuth.style.display='none'; btnLogout.style.display='inline-block';
+
+    // Suscribirse a colecciones
+    if(unsubEvents) unsubEvents(); if(unsubExtras) unsubExtras();
+    unsubExtras = UCOL('extras').orderBy('name').onSnapshot(s=>{
+      extras = []; s.forEach(d=> extras.push(d.data()));
+      if(!extras.length){ // sembrar por primera vez
+        const batch = db.batch();
+        [...BASE_EXTRAS, ...BASE_COMBOS].forEach(e=>{
+          const id = uid(); batch.set(UCOL('extras').doc(id), {id, ...e});
+        });
+        batch.commit();
+      }
+      store.set(K.EXTRAS, extras); fillCatalogSelects(); renderCatalog(); // espejo local
+    });
+
+    unsubEvents = UCOL('events').orderBy('date','desc').onSnapshot(s=>{
+      events = []; s.forEach(d=> events.push(d.data()));
+      store.set(K.EVENTS, events); renderEventList();
+      if(currentEventId){ // si panel abierto, refrescar
+        const still = events.find(e=>e.id===currentEventId);
+        if(still){ renderEventItems(); renderPayments(); refreshSummary(); } else { evPanelBk.style.display='none'; currentEventId=null; }
+      }
+    });
+
+    // mediaMap (1 doc grande por ítem) — opcional; si no existe se va armando
+    unsubMedia = UCOL('media').onSnapshot(s=>{
+      mediaMap={}; s.forEach(d=> mediaMap[d.id]=d.data().arr||[]);
+      store.set(K.MEDIA, mediaMap);
+    });
+
+  }else{
+    who.textContent='—';
+    saveMode.textContent='Modo invitado (local)';
+    btnAuth.style.display='inline-block'; btnLogout.style.display='none';
+    if(unsubEvents) unsubEvents(); if(unsubExtras) unsubExtras(); if(unsubMedia) unsubMedia();
+    extras = store.get(K.EXTRAS, extras); events = store.get(K.EVENTS, events); mediaMap = store.get(K.MEDIA, mediaMap);
+    renderEventList(); fillCatalogSelects(); renderCatalog();
+  }
+});
+
+/* ===== Refs del resto de UI ===== */
+const evForm = document.getElementById('evForm');
+const evType = document.getElementById('evType');
+const evName = document.getElementById('evName');
+const evDate = document.getElementById('evDate');
+const errName = document.getElementById('errName');
+const errDate = document.getElementById('errDate');
+const errPeople = document.getElementById('errPeople');
+const errPrice = document.getElementById('errPrice');
+const evPeople = document.getElementById('evPeople');
+const evPricePer = document.getElementById('evPricePer');
+const evProvince = document.getElementById('evProvince');
+const evSalon = document.getElementById('evSalon');
+const evOption = document.getElementById('evOption');
+const evBasePreview = document.getElementById('evBasePreview');
+
+const newExFor = document.getElementById('newExFor');
+const newExQty = document.getElementById('newExQty');
+const newExPrice = document.getElementById('newExPrice');
+const newAddEx = document.getElementById('newAddEx');
+const newExList = document.getElementById('newExList');
+const newExTotal = document.getElementById('newExTotal');
+const newSumBase = document.getElementById('newSumBase');
+const newSumExtras = document.getElementById('newSumExtras');
+const newSumTotal = document.getElementById('newSumTotal');
+const newClear = document.getElementById('newClear');
+
+const exType = document.getElementById('exType');
+const exName = document.getElementById('exName');
+const exPrice = document.getElementById('exPrice');
+const exCreate = document.getElementById('exCreate');
+const exSelectFiles = document.getElementById('exSelectFiles');
+const exList = document.getElementById('exList');
+const exMedia = document.getElementById('exMedia');
+const drop = document.getElementById('drop');
+const fileInput = document.getElementById('fileInput');
+const btnUpload = document.getElementById('btnUpload');
+const exLink = document.getElementById('exLink');
+const btnAddLink = document.getElementById('btnAddLink');
+
+const evSearch = document.getElementById('evSearch');
+const evList = document.getElementById('evList');
+const provChips = Array.from(document.querySelectorAll('.subtabs .chip'));
+
+const evPanelBk = document.getElementById('evPanelBk');
+const pClose = document.getElementById('pClose');
+const pDelete = document.getElementById('pDelete');
+const pEvName = document.getElementById('pEvName');
+const pEvMeta = document.getElementById('pEvMeta');
+
+const exForEvent = document.getElementById('exForEvent');
+const exQty = document.getElementById('exQty');
+const exPriceOverride = document.getElementById('exPriceOverride');
+const addExtraToEvent = document.getElementById('addExtraToEvent');
+const evExtrasList = document.getElementById('evExtrasList');
+const evExtrasTotal = document.getElementById('evExtrasTotal');
+const evClearExtras = document.getElementById('evClearExtras');
+
+const payClient = document.getElementById('payClient');
+const payAmount = document.getElementById('payAmount');
+const payMethod = document.getElementById('payMethod');
+const payProof  = document.getElementById('payProof');
+const payUpload = document.getElementById('payUpload');
+const payProofLink = document.getElementById('payProofLink');
+const payUseLink = document.getElementById('payUseLink');
+const proofStatus = document.getElementById('proofStatus');
+const paySave = document.getElementById('paySave');
+const btnGeneralReceipt = document.getElementById('btnGeneralReceipt');
+const payTotal = document.getElementById('payTotal');
+const payList = document.getElementById('payList');
+
+const newPricePer = document.getElementById('newPricePer');
+const adjPercent = document.getElementById('adjPercent');
+const adjAmount = document.getElementById('adjAmount');
+const adjPerHead = document.getElementById('adjPerHead');
+const btnReprice = document.getElementById('btnReprice');
+const adjApply = document.getElementById('adjApply');
+
+const sumSalon = document.getElementById('sumSalon');
+const sumPeople = document.getElementById('sumPeople');
+const sumPricePer = document.getElementById('sumPricePer');
+const sumBase = document.getElementById('sumBase');
+const sumAdj = document.getElementById('sumAdj');
+const sumExtras = document.getElementById('sumExtras');
+const sumTotal = document.getElementById('sumTotal');
+const sumPaid = document.getElementById('sumPaid');
+const sumRemain = document.getElementById('sumRemain');
+const editSalon = document.getElementById('editSalon');
+const saveSalon = document.getElementById('saveSalon');
+
+let currentEventId = null;
+let lastUploadedProofUrl = null;
+let lastUploadedProofKind = null;
+let newEventItems = [];
+
+/* ===== INIT ===== */
+document.addEventListener('DOMContentLoaded', ()=>{
+  fillCatalogSelects(); renderCatalog(); renderEventList(); updateNewPreview();
+  ['input','change'].forEach(evt=>{ evPeople.addEventListener(evt, updateNewPreview); evPricePer.addEventListener(evt, updateNewPreview); });
+  provChips.forEach(ch=> ch.onclick=()=>{ provChips.forEach(x=>x.classList.remove('active')); ch.classList.add('active'); renderEventList(); });
+});
+
+/* ===== Helpers ===== */
+function fillCatalogSelects(){
+  function fill(sel){
+    sel.innerHTML=''; const g1=document.createElement('optgroup'); g1.label='Extras'; const g2=document.createElement('optgroup'); g2.label='Combos';
+    extras.filter(x=>x.type==='extra').forEach(it=>{ const o=document.createElement('option'); o.value=it.id; o.textContent=`${it.name} — ${money(it.price)}`; g1.appendChild(o); });
+    extras.filter(x=>x.type==='combo').forEach(it=>{ const o=document.createElement('option'); o.value=it.id; o.textContent=`${it.name} — ${money(it.price)}`; g2.appendChild(o); });
+    sel.appendChild(g1); sel.appendChild(g2);
+  } fill(newExFor); fill(exForEvent); fill(exSelectFiles);
+}
+function parseDateInput(v){ v=(v||'').trim(); if(!v) return ''; if(/^\d{4}-\d{2}-\d{2}$/.test(v)) return v; const m=v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); if(m){ const d=m[1].padStart(2,'0'), mo=m[2].padStart(2,'0'), y=m[3]; return `${y}-${mo}-${d}`; } return v; }
+function getActiveProvince(){ const a=document.querySelector('.subtabs .chip.active'); return a?.dataset.prov || 'San Juan'; }
+
+/* ===== Crear evento ===== */
+evForm.addEventListener('submit', (e)=>{ e.preventDefault(); handleCreateEvent(); });
+async function handleCreateEvent(){
+  errName.textContent=errDate.textContent=errPeople.textContent=errPrice.textContent='';
+  const name=(evName.value||'').trim(); const date=parseDateInput(evDate.value); const people=num(evPeople.value); const pricePer=num(evPricePer.value);
+  if(!name){ errName.textContent=' requerido'; return; } if(!date){ errDate.textContent=' requerido'; return; } if(people<=0){ errPeople.textContent=' inválido'; return; } if(pricePer<=0){ errPrice.textContent=' inválido'; return; }
+
+  const id=uid();
+  const payload={ id, type:evType.value, name, date, people, pricePer,
+    baseTotal:people*pricePer, adjustmentsTotal:0, province:evProvince.value||'San Juan',
+    salon:(evSalon.value||'').trim()||null, optionLabel:(evOption.value||'').trim()||null,
+    items:[...newEventItems.map(x=>({...x}))], payments:[], adjustments:[], createdAt:Date.now()
+  };
+
+  if(isAuthed()){
+    const ref = await UCOL('events').add(payload); await ref.update({id:ref.id});
+  }else{
+    events.unshift(payload); store.set(K.EVENTS, events);
+  }
+
+  evType.value='15 años'; evName.value=''; evDate.value=''; evPeople.value='100'; evPricePer.value='';
+  evOption.value=''; evSalon.value=''; newEventItems=[]; renderNewItems(); updateNewPreview();
+  renderEventList(); alert('Evento creado ✅');
+}
+
+/* ===== Ítems NUEVO evento ===== */
+newAddEx.addEventListener('click', ()=>{ const id=newExFor.value; if(!id) return alert('Elegí un ítem');
+  const base=extras.find(x=>x.id===id); const qty=Math.max(1,num(newExQty.value)); const override=newExPrice.value===''?null:num(newExPrice.value);
+  newEventItems.unshift({id:base.id,type:base.type,name:base.name,price:base.price,overridePrice:override,qty}); newExQty.value='1'; newExPrice.value=''; renderNewItems(); updateNewPreview();
+});
+newClear.addEventListener('click', ()=>{ newEventItems=[]; renderNewItems(); updateNewPreview(); });
+function renderNewItems(){ newExList.innerHTML=''; let total=0;
+  newEventItems.forEach((e,idx)=>{ const price=num(e.overridePrice ?? e.price); const sub=price*e.qty; total+=sub;
+    const div=document.createElement('div'); div.className='item';
+    const chip=e.type==='combo'?'<span class="badge">Combo</span>':'<span class="badge">Extra</span>';
+    div.innerHTML=`<div><b>${e.name}</b> ${chip}<div class="small">Precio: ${money(price)} — Cant: ${e.qty} — Subtotal: <b>${money(sub)}</b></div></div>
+                   <button class="ghost" data-del="${idx}">Quitar</button>`; newExList.appendChild(div);
+  });
+  newExList.querySelectorAll('button[data-del]').forEach(b=> b.onclick=()=>{ newEventItems.splice(Number(b.dataset.del),1); renderNewItems(); updateNewPreview(); });
+  newExTotal.textContent=money(total);
+}
+function updateNewPreview(){ const base=num(evPeople.value)*num(evPricePer.value); let ex=0; newEventItems.forEach(e=>{ const price=num(e.overridePrice ?? e.price); ex+=price*num(e.qty); });
+  newSumBase.textContent=money(base); newSumExtras.textContent=money(ex); newSumTotal.textContent=money(base+ex); evBasePreview.textContent='Total base estimado: '+money(base);
+}
+
+/* ===== Catálogo ===== */
+function renderCatalog(){
+  exList.innerHTML=''; extras.forEach(it=>{ const row=document.createElement('div'); row.className='item';
+    const badge=it.type==='combo'?'<span class="badge">Combo</span>':'<span class="badge">Extra</span>';
+    row.innerHTML=`<div><b>${it.name}</b> ${badge}
+       <div class="small">Precio catálogo: ${money(num(it.price))}</div>
+       <div class="inline" style="margin-top:6px">
+         <input type="text" class="name" value="${it.name}" data-id="${it.id}">
+         <select class="kind" data-id="${it.id}">
+           <option value="extra"${it.type!=='combo'?' selected':''}>Extra</option>
+           <option value="combo"${it.type==='combo'?' selected':''}>Combo</option>
+         </select>
+         <input type="text" class="price" value="${num(it.price)}" data-id="${it.id}" inputmode="decimal">
+         <button class="ghost" data-save="${it.id}" type="button">Guardar</button>
+         <button class="ghost" data-del="${it.id}" type="button">Eliminar</button>
+         <button class="ghost" data-view="${it.id}" type="button">Galería</button>
+       </div></div>`; exList.appendChild(row);
+  });
+  exList.querySelectorAll('button[data-save]').forEach(b=>{
+    b.onclick=async ()=>{ const id=b.dataset.save; const name=exList.querySelector(`input.name[data-id="${id}"]`).value.trim();
+      let price=num(exList.querySelector(`input.price[data-id="${id}"]`).value); const type=exList.querySelector(`select.kind[data-id="${id}"]`).value;
+      const idx=extras.findIndex(x=>x.id===id); extras[idx]={...extras[idx],name,price,type};
+      if(isAuthed()) await UCOL('extras').doc(id).set(extras[idx]); store.set(K.EXTRAS, extras); fillCatalogSelects(); renderCatalog();
+    };
+  });
+  exList.querySelectorAll('button[data-del]').forEach(b=> b.onclick=async ()=>{ if(!confirm('Eliminar ítem?')) return;
+    extras=extras.filter(x=>x.id!==b.dataset.del); if(isAuthed()) await UCOL('extras').doc(b.dataset.del).delete(); store.set(K.EXTRAS, extras); fillCatalogSelects(); renderCatalog();
+  });
+  exList.querySelectorAll('button[data-view]').forEach(b=> b.onclick=()=> loadGallery(b.dataset.view));
+}
+exCreate.addEventListener('click', async ()=>{ const name=(exName.value||'').trim(); if(!name) return alert('Nombre requerido'); let price=num(exPrice.value||0); if(price<=0) return alert('Precio inválido');
+  const id=uid(); const obj={id,type:exType.value,name,price};
+  extras.unshift(obj); if(isAuthed()) await UCOL('extras').doc(id).set(obj);
+  store.set(K.EXTRAS, extras); exName.value=''; exPrice.value=''; fillCatalogSelects(); renderCatalog();
+});
+
+/* Archivos ítem (guardado en Firestore como dataURL/enlace dentro de doc de media) */
+let selectedFiles=[];
+function fileToDataUrl(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file); }); }
+const okMediaSize = 900_000; // aprox
+drop.addEventListener('dragover',e=>{e.preventDefault();drop.classList.add('drag');});
+drop.addEventListener('dragleave',()=>drop.classList.remove('drag'));
+drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('drag');selectedFiles=Array.from(e.dataTransfer.files||[]);alert(`${selectedFiles.length} archivo(s) listos`);});
+fileInput.addEventListener('change',()=> selectedFiles = Array.from(fileInput.files||[]));
+btnUpload.addEventListener('click', async ()=>{ const id=exSelectFiles.value; if(!id) return alert('Elegí un ítem'); if(!selectedFiles.length) return alert('Seleccioná archivos');
+  mediaMap[id]=mediaMap[id]||[];
+  for(const f of selectedFiles){ const dataUrl=await fileToDataUrl(f); if((dataUrl||'').length>okMediaSize){ alert(`"${f.name}" pesa mucho. Pegá un enlace en su lugar.`); continue; }
+    mediaMap[id].unshift({name:f.name,type:f.type||'file',dataUrl,at:Date.now()});
+  }
+  selectedFiles=[]; fileInput.value='';
+  if(isAuthed()) await UCOL('media').doc(id).set({arr:mediaMap[id]}); store.set(K.MEDIA, mediaMap);
+  alert('Archivos guardados'); await loadGallery(id);
+});
+btnAddLink.addEventListener('click', async ()=>{ const id=exSelectFiles.value; if(!id) return alert('Elegí un ítem'); const link=(exLink.value||'').trim(); if(!isHttp(link)) return alert('Pegá un enlace válido');
+  mediaMap[id]=mediaMap[id]||[]; mediaMap[id].unshift({name:link.split('/').pop(),type:'link',url:link,at:Date.now()});
+  if(isAuthed()) await UCOL('media').doc(id).set({arr:mediaMap[id]}); store.set(K.MEDIA, mediaMap); exLink.value=''; await loadGallery(id);
+});
+async function loadGallery(id){
+  exMedia.innerHTML=''; const arr=mediaMap[id]||[];
+  if(!arr.length){ exMedia.innerHTML='<div class="small">Sin archivos</div>'; return; }
+  arr.forEach(m=>{ const box=document.createElement('div'); box.className='media';
+    const pdf=(m.type||'').includes('pdf') || (m.url||'').toLowerCase().endsWith('.pdf') || (m.dataUrl||'').startsWith('data:application/pdf');
+    const imgUrl=m.dataUrl||m.url;
+    if(pdf){ box.innerHTML=`<div>PDF</div><a class="link" href="${imgUrl}" target="_blank">Abrir</a>`; }
+    else if(imgUrl){ box.innerHTML=`<img src="${imgUrl}" alt=""><a class="link" href="${imgUrl}" target="_blank">Ver grande</a>`; }
+    else{ box.innerHTML=`<div class="small">Archivo</div>`; }
+    exMedia.appendChild(box);
+  });
+}
+
+/* ===== Eventos: listado ===== */
+function renderEventList(){
+  const q=(evSearch.value||'').toLowerCase(); const prov=getActiveProvince();
+  evList.innerHTML=''; events.filter(e=> (e.name||'').toLowerCase().includes(q)).filter(e=> prov==='Todos'?true:((e.province||'San Juan')===prov)).forEach(e=>{
+    const totals=computeTotals(e); const div=document.createElement('div'); div.className='item';
+    const meta=`${e.type||'-'} • ${e.date||'sin fecha'} • ${e.province||'San Juan'}`; const opt=e.optionLabel||'—'; const salonTxt=e.salon?` • Salón: ${e.salon}`:'';
+    div.innerHTML=`<div><b>${e.name||'-'}</b><div class="small">${meta}${salonTxt}</div></div>
+                   <div class="inline">
+                     <span class="small">Opción: <b>${opt}</b></span>
+                     <span class="small">Precio/Persona: <b>${money(e.pricePer||0)}</b></span>
+                     <span class="small">Faltante: <b>${money(totals.remain)}</b></span>
+                     <button class="ghost" data-open="${e.id}">Abrir</button>
+                     <button class="ghost" data-del="${e.id}">Eliminar</button>
+                   </div>`; evList.appendChild(div);
+  });
+  evList.querySelectorAll('button[data-open]').forEach(b=> b.onclick=()=> openEventPanel(b.dataset.open));
+  evList.querySelectorAll('button[data-del]').forEach(b=> b.onclick=()=> deleteEventDeep(b.dataset.del));
+}
+evSearch.addEventListener('input', renderEventList);
+function computeTotals(ev){ const base=(ev.people||0)*(ev.pricePer||0); const adj=ev.adjustmentsTotal||0;
+  let extrasTotal=0; (ev.items||[]).forEach(it=> extrasTotal += num(it.overridePrice??it.price)*num(it.qty||1));
+  let paid=0; (ev.payments||[]).forEach(p=> paid += num(p.amount)); const total=base+adj+extrasTotal; const remain=Math.max(0,total-paid);
+  return {base,adj,extrasTotal,total,paid,remain,pricePer:ev.pricePer||0,people:ev.people||0};
+}
+
+/* ===== Panel evento ===== */
+pClose.addEventListener('click', ()=> evPanelBk.style.display='none');
+pDelete.addEventListener('click', ()=> currentEventId && deleteEventDeep(currentEventId));
+function openEventPanel(id){ currentEventId=id; const ev=events.find(x=>x.id===id)||{};
+  pEvName.textContent=ev.name||'Evento'; pEvMeta.textContent=`${ev.type||'-'} • ${ev.date||'sin fecha'} • ${ev.province||'San Juan'}`; editSalon.value=ev.salon||'';
+  renderEventItems(); renderPayments(); refreshSummary(); evPanelBk.style.display='flex';
+}
+
+/* ===== Guardar cambios en evento (local o nube) ===== */
+async function persistEvent(ev){
+  if(isAuthed()) await UCOL('events').doc(ev.id).set(ev,{merge:true});
+  else { const i=events.findIndex(x=>x.id===ev.id); if(i>-1) events[i]=ev; store.set(K.EVENTS, events); }
+}
+
+/* ===== Editar salón ===== */
+saveSalon.addEventListener('click', async ()=>{ if(!currentEventId) return; const ev=events.find(e=>e.id===currentEventId); ev.salon=(editSalon.value||'').trim()||null; await persistEvent(ev); refreshSummary(); renderEventList(); });
+
+/* ===== Ítems del evento ===== */
+addExtraToEvent.addEventListener('click', async ()=>{ if(!currentEventId) return alert('Abrí un evento');
+  const id=exForEvent.value; if(!id) return alert('Elegí un ítem'); const base=extras.find(x=>x.id===id); const qty=Math.max(1,num(exQty.value));
+  const override=exPriceOverride.value===''?null:num(exPriceOverride.value); const ev=events.find(e=>e.id===currentEventId); ev.items=ev.items||[];
+  ev.items.unshift({itemId:id,type:base.type||'extra',name:base.name,price:num(base.price||0),overridePrice:override,qty});
+  await persistEvent(ev); exQty.value='1'; exPriceOverride.value=''; renderEventItems(); refreshSummary(); renderEventList();
+});
+function renderEventItems(){ const ev=events.find(e=>e.id===currentEventId); evExtrasList.innerHTML=''; if(!ev){ evExtrasTotal.textContent=money(0); return; }
+  let total=0; (ev.items||[]).forEach((e,idx)=>{ const price=num(e.overridePrice ?? e.price); const sub=price*num(e.qty||1); total+=sub;
+    const row=document.createElement('div'); row.className='item'; const chip=e.type==='combo' ? '<span class="badge">Combo</span>' : '<span class="badge">Extra</span>';
+    row.innerHTML=`<div><b>${e.name}</b> ${chip}
+      <div class="small">Precio: ${money(price)} — Cant: ${e.qty} — Subtotal: <b>${money(sub)}</b></div>
+      <div class="inline" style="margin-top:6px">
+        <input type="text" class="price" value="${price}" data-idx="${idx}" inputmode="decimal">
+        <input type="number" class="qty" value="${e.qty}" min="1" data-idx="${idx}">
+        <button class="ghost" data-upd="${idx}" type="button">Actualizar</button>
+        <button class="ghost" data-del="${idx}" type="button">Quitar</button>
+      </div></div>`; evExtrasList.appendChild(row);
+  });
+  evExtrasTotal.textContent=money(total);
+  evExtrasList.querySelectorAll('button[data-upd]').forEach(b=> b.onclick=async ()=>{ const i=+b.dataset.upd; const ev=events.find(e=>e.id===currentEventId);
+    let p=num(evExtrasList.querySelector(`input.price[data-idx="${i}"]`).value); const q=Math.max(1,num(evExtrasList.querySelector(`input.qty[data-idx="${i}"]`).value));
+    ev.items[i].overridePrice=p; ev.items[i].qty=q; await persistEvent(ev); renderEventItems(); refreshSummary(); renderEventList(); });
+  evExtrasList.querySelectorAll('button[data-del]').forEach(b=> b.onclick=async ()=>{ const i=+b.dataset.del; const ev=events.find(e=>e.id===currentEventId); ev.items.splice(i,1); await persistEvent(ev); renderEventItems(); refreshSummary(); renderEventList(); });
+}
+evClearExtras.addEventListener('click', async ()=>{ const ev=events.find(e=>e.id===currentEventId); ev.items=[]; await persistEvent(ev); renderEventItems(); refreshSummary(); renderEventList(); });
+
+/* ===== Resumen / pagos / ajustes / recibos ===== */
+function refreshSummary(){ const ev=events.find(e=>e.id===currentEventId); if(!ev){ [sumBase,sumAdj,sumExtras,sumTotal,sumPaid,sumRemain,sumPeople,sumPricePer,sumSalon].forEach(el=>el.textContent=money(0)); return; }
+  const t=computeTotals(ev); sumSalon.textContent=ev.salon||'—'; sumPeople.textContent=t.people; sumPricePer.textContent=money(t.pricePer);
+  sumBase.textContent=money(t.base); sumAdj.textContent=money(t.adj); sumExtras.textContent=money(t.extrasTotal); sumTotal.textContent=money(t.total); sumPaid.textContent=money(t.paid); sumRemain.textContent=money(t.remain); payTotal.textContent=money(t.paid);
+}
+function renderPayments(){ const ev=events.find(e=>e.id===currentEventId); payList.innerHTML=''; if(!ev) return;
+  (ev.payments||[]).slice().reverse().forEach(p=>{ const proofHtml=p.proofUrl?`<a class="link" data-proof="${p.proofUrl}" data-kind="${p.proofKind==='pdf'?'pdf':'img'}">${/^http/i.test(p.proofUrl)?'Ver comprobante':'Ver ('+(p.proofKind==='pdf'?'PDF':'imagen')+')'}</a>`:'<span class="small">Sin comprobante</span>';
+    const div=document.createElement('div'); div.className='item';
+    div.innerHTML=`<div><b>${p.client||'Cliente'}</b>
+        <div class="small">${new Date(p.at).toLocaleString('es-AR')} — ${p.method}</div>
+        <div class="small">Monto: <b>${money(p.amount)}</b></div>
+        ${proofHtml}
+      </div>
+      <div class="inline">
+        <button class="ghost" data-receipt="${p.id}">Recibo</button>
+        <button class="ghost" data-delpay="${p.id}">Eliminar</button>
+      </div>`; payList.appendChild(div);
+  });
+  payList.querySelectorAll('a[data-proof]').forEach(a=> a.onclick=()=> openProof(a.dataset.proof, a.dataset.kind));
+  payList.querySelectorAll('button[data-receipt]').forEach(b=> b.onclick=()=> generateReceipt(currentEventId,b.dataset.receipt));
+  payList.querySelectorAll('button[data-delpay]').forEach(b=> b.onclick=()=> deletePayment(b.dataset.delpay));
+}
+function openProof(url, kind){ if(!url) return; const w=window.open('', '_blank'); if(!w) return;
+  if(kind==='pdf' || /\.pdf($|\?)/i.test(url) || url.startsWith('data:application/pdf')){ w.document.write(`<embed src="${url}" type="application/pdf" style="border:0;width:100%;height:100%"/>`); }
+  else{ w.document.write(`<img src="${url}" style="max-width:100%;height:auto;display:block" />`); }
+}
+async function deletePayment(pid){ const ev=events.find(e=>e.id===currentEventId); ev.payments=ev.payments.filter(p=>p.id!==pid); await persistEvent(ev); renderPayments(); refreshSummary(); renderEventList(); }
+function loadProofFromFile(file){ const okType=/^image\//i.test(file.type)||file.type==='application/pdf'||/\.pdf$/i.test(file.name); if(!okType) return alert('Solo imagen o PDF');
+  if(file.size>1.8*1024*1024) return alert('El archivo supera 1.8 MB'); const r=new FileReader(); r.onload=()=>{ lastUploadedProofUrl=r.result; lastUploadedProofKind = file.type==='application/pdf'||/\.pdf$/i.test(file.name) ? 'pdf' : 'image'; proofStatus.textContent= lastUploadedProofKind==='pdf' ? 'Comprobante listo (PDF) ✔' : 'Comprobante listo (imagen) ✔'; }; r.readAsDataURL(file);
+}
+payProof.addEventListener('change', ()=>{ if(payProof.files && payProof.files[0]) loadProofFromFile(payProof.files[0]); });
+payUpload.addEventListener('click', ()=>{ if(!payProof.files || !payProof.files.length) return alert('Elegí un archivo (imagen o PDF)'); loadProofFromFile(payProof.files[0]); });
+payUseLink.addEventListener('click', ()=>{ const link=(payProofLink.value||'').trim(); if(!isHttp(link)) return alert('Pegá un enlace http/https válido'); lastUploadedProofUrl=link; lastUploadedProofKind=/\.pdf($|\?)/i.test(link)?'pdf':'link'; proofStatus.textContent='Comprobante listo (enlace) ✔'; });
+paySave.addEventListener('click', async ()=>{ if(!currentEventId) return alert('Abrí un evento');
+  const amount=num(payAmount.value); if(amount<=0) return alert('Monto inválido'); if(!lastUploadedProofUrl) return alert('Subí o pegá el COMPROBANTE (obligatorio)');
+  const ev=events.find(e=>e.id===currentEventId); ev.payments=ev.payments||[];
+  ev.payments.push({id:uid(), client:(payClient.value||'').trim()||'Cliente', amount, method:payMethod.value, proofUrl:lastUploadedProofUrl, proofKind:lastUploadedProofKind||'link', at:Date.now()});
+  payAmount.value=''; payClient.value=''; payProof.value=''; payProofLink.value=''; lastUploadedProofUrl=null; lastUploadedProofKind=null; proofStatus.textContent='Sin comprobante';
+  await persistEvent(ev); renderPayments(); refreshSummary(); renderEventList(); alert('Pago registrado ✅');
+});
+
+/* ===== Numeración recibos (nube o local) ===== */
+async function nextSeqAny(){
+  if(isAuthed()){
+    const ref = UCOL('meta').doc('counters');
+    const val = await db.runTransaction(async tx=>{
+      const snap=await tx.get(ref); let cur=0; if(snap.exists) cur = Number(snap.data().payseq||0); cur++; tx.set(ref,{payseq:cur},{merge:true}); return cur;
+    });
+    return String(val).padStart(12,'0');
+  }else{
+    return nextSeqLocal();
+  }
+}
+
+/* ===== Reprecio por persona (afecta solo lo pendiente) ===== */
+btnReprice.addEventListener('click', async ()=>{ if(!currentEventId) return alert('Abrí un evento');
+  const ev=events.find(e=>e.id===currentEventId); const newP=num(newPricePer.value); if(newP<=0) return alert('Nuevo precio inválido');
+  const oldP=num(ev.pricePer||0); const P=num(ev.people||0); const paid=(ev.payments||[]).reduce((a,p)=> a+num(p.amount),0);
+  const pplPaidEquiv=Math.min(P, Math.floor(paid/Math.max(1,oldP))); const remainingPeople=Math.max(0,P-pplPaidEquiv); const delta=(newP-oldP)*remainingPeople;
+  ev.pricePer=newP; ev.adjustments=ev.adjustments||[]; const note=`Reprecio: ${money(oldP)} → ${money(newP)} (sobre ${remainingPeople} pendientes)`; ev.adjustments.push({amount:delta,note,at:Date.now()});
+  ev.adjustmentsTotal=num(ev.adjustmentsTotal||0)+delta; await persistEvent(ev); newPricePer.value=''; refreshSummary(); renderEventList(); alert('Precio actualizado (solo saldo pendiente) ✅');
+});
+
+/* ===== Ajustes manuales ===== */
+adjApply.addEventListener('click', async ()=>{ const ev=events.find(e=>e.id===currentEventId); if(!ev) return alert('Abrí un evento');
+  const base=(ev.people||0)*(ev.pricePer||0), adjPrev=ev.adjustmentsTotal||0, people=ev.people||0;
+  const exTotal=(ev.items||[]).reduce((a,it)=> a + num(it.overridePrice??it.price)*num(it.qty||1),0);
+  const paid=(ev.payments||[]).reduce((a,p)=> a + num(p.amount),0); const total=base+adjPrev+exTotal; const saldo=Math.max(0,total-paid);
+  const pct=num(adjPercent.value), amt=num(adjAmount.value), perHead=num(adjPerHead.value); let aumento=0, note='';
+  if(perHead>0){ aumento=perHead*people; note=`Aumento ${money(perHead)} por persona × ${people}`; }
+  else if(amt>0){ aumento=amt; note='Aumento fijo'; }
+  else if(pct>0){ aumento=saldo*(pct/100); note=`Aumento ${pct}% sobre saldo`; }
+  else return alert('Ingresá un valor en % ó monto fijo ó por persona');
+  ev.adjustments=ev.adjustments||[]; ev.adjustments.push({amount:aumento,note,at:Date.now()}); ev.adjustmentsTotal=(ev.adjustmentsTotal||0)+aumento;
+  adjPercent.value=''; adjAmount.value=''; adjPerHead.value=''; await persistEvent(ev); refreshSummary(); renderEventList(); alert('Ajuste aplicado ✅');
+});
+
+/* ===== Recibos (layout sin superposiciones) ===== */
+async function generateReceipt(eventId, paymentId){
+  const { jsPDF } = window.jspdf; const ev=events.find(e=>e.id===eventId); const p=(ev.payments||[]).find(x=>x.id===paymentId); if(!p) return;
+  const remito = p.receiptNo || (p.receiptNo = await nextSeqAny(), await persistEvent(ev), p.receiptNo);
+  const t=computeTotals(ev); const doc=new jsPDF({unit:'mm', format:'a4'}), W=210;
+
+  doc.setLineWidth(0.2); doc.rect(10,10,W-20,277);
+  try{ const imgData=await (async()=>{ const i=new Image(); i.crossOrigin='anonymous'; i.src=document.getElementById('logoPreview').src; await new Promise(r=>i.onload=r); const c=document.createElement('canvas'); c.width=i.width; c.height=i.height; const x=c.getContext('2d'); x.drawImage(i,0,0); return c.toDataURL('image/png');})(); doc.addImage(imgData,'PNG', W-42, 14, 26, 26);}catch(e){}
+  doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.text('RECIBO', 18, 24);
+  doc.setFontSize(11); doc.setFont('helvetica','normal'); doc.text('OK EVENTOS — CATERING Y EGRESADOS', 18, 31);
+
+  const y0=40;
+  doc.setFontSize(10);
+  doc.rect(16, y0, 110, 12); doc.text('Nombre del evento', 18, y0+5);
+  doc.setFont('helvetica','bold'); doc.text(doc.splitTextToSize((ev.name||'-'),106), 18, y0+9); doc.setFont('helvetica','normal');
+
+  doc.rect(128,y0, 36, 12); doc.text('Fecha evento', 130, y0+5); doc.setFont('helvetica','bold'); doc.text(ev.date || '-', 130, y0+9); doc.setFont('helvetica','normal');
+  doc.rect(166,y0, 34, 12); doc.text('Provincia', 168, y0+5); doc.setFont('helvetica','bold'); doc.text(ev.province||'-', 168, y0+9); doc.setFont('helvetica','normal');
+
+  const y1=y0+14;
+  doc.rect(16, y1, 92, 12); doc.text('Salón', 18, y1+5); doc.setFont('helvetica','bold'); doc.text(doc.splitTextToSize(ev.salon||'—',88), 18, y1+9); doc.setFont('helvetica','normal');
+  doc.rect(110,y1, 45, 12); doc.text('Opción/Plan', 112, y1+5); doc.setFont('helvetica','bold'); doc.text(doc.splitTextToSize(ev.optionLabel||'—',41), 112, y1+9); doc.setFont('helvetica','normal');
+  doc.rect(157,y1, 43, 12); doc.text('Precio opción actual', 159, y1+5); doc.setFont('helvetica','bold'); doc.text(money(ev.pricePer||0), 159, y1+9); doc.setFont('helvetica','normal');
+
+  const pagoFecha = new Date(p.at).toLocaleDateString('es-AR');
+  const y2 = y1+14;
+  doc.rect(16, y2, 64, 12); doc.text('Fecha de pago', 18, y2+5); doc.setFont('helvetica','bold'); doc.text(pagoFecha, 18, y2+9); doc.setFont('helvetica','normal');
+  doc.rect(82, y2, 118, 12); doc.text('Remito Nº', 84, y2+5); doc.setFont('helvetica','bold'); doc.text(remito, 140, y2+9, {align:'center'}); doc.setFont('helvetica','normal');
+
+  const ty = y2+14;
+  doc.rect(16, ty, 22, 10); doc.text('Cant.', 19, ty+6);
+  doc.rect(38, ty, 94, 10); doc.text('Detalle (clic para comprobante)', 40, ty+6);
+  doc.rect(132,ty, 34, 10); doc.text('P. Unitario', 134, ty+6);
+  doc.rect(166,ty, 34, 10); doc.text('Total', 168, ty+6);
+
+  const ry=ty+10; const montoFmt=num(p.amount).toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2});
+  doc.rect(16, ry, 22, 10); doc.text('1', 19, ry+6);
+  doc.rect(38, ry, 94, 10); doc.text('Pago — '+(p.method||'-'), 40, ry+6);
+  doc.rect(132,ry, 34, 10); doc.text(`$ ${montoFmt}`, 134, ry+6);
+  doc.rect(166,ry, 34, 10); doc.text(`$ ${montoFmt}`, 168, ry+6);
+
+  // Link al comprobante
+  const linkArea={x:38,y:ry,w:94,h:10};
+  if(isHttp(p.proofUrl)){ doc.link(linkArea.x, linkArea.y, linkArea.w, linkArea.h, {url:p.proofUrl}); }
+  else if(/^data:image\//i.test(p.proofUrl)){
+    doc.addPage(); doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.text('Comprobante (imagen)', 14, 18);
+    try{ doc.addImage(p.proofUrl,'JPEG',14,24,180,250,undefined,'FAST'); }catch(e){ doc.setFontSize(11); doc.text('No se pudo incrustar la imagen del comprobante.', 14, 30); }
+    doc.setPage(1); doc.link(linkArea.x, linkArea.y, linkArea.w, linkArea.h, {pageNumber:2});
+  }else if(/^data:application\/pdf/i.test(p.proofUrl)){
+    const target = doc.getNumberOfPages()+1; doc.addPage(); doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.text('Comprobante (PDF)', 14, 18);
+    doc.setFont('helvetica','normal'); doc.setFontSize(11); doc.textWithLink('Abrir PDF del comprobante', 14, 28, { url: p.proofUrl });
+    doc.setPage(1); doc.link(linkArea.x, linkArea.y, linkArea.w, linkArea.h, {pageNumber:target});
+  }
+
+  const TY = ry+16;
+  doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.text('Totales del evento', 16, TY);
+  doc.setLineWidth(0.2); doc.rect(16, TY+2, 184, 36);
+  doc.setFont('helvetica','normal'); doc.setFontSize(10);
+  doc.text(`Personas: ${t.people}`, 18, TY+10);
+  doc.text(`Precio cierre por persona (actual): ${money(t.pricePer)}`, 110, TY+10);
+  doc.text(`Total base: ${money(t.base)}`, 18, TY+18);
+  doc.text(`Ajustes: ${money(t.adj)}`, 110, TY+18);
+  doc.text(`Extras/Combos: ${money(t.extrasTotal)}`, 18, TY+26);
+  doc.setFont('helvetica','bold'); doc.text(`TOTAL: ${money(t.total)}`, 110, TY+26);
+  doc.setFont('helvetica','normal'); doc.text(`Abonado: ${money(t.paid)}`, 18, TY+34);
+  doc.setFont('helvetica','bold'); doc.text(`SALDO: ${money(t.remain)}`, 110, TY+34);
+
+  const safe=(ev.name||'evento').replace(/[^\p{L}\p{N}_-]+/gu,'_');
+  doc.save(`Recibo_${remito}_${safe}.pdf`);
+}
+
+/* Recibo GENERAL con filas altas y sin superposiciones */
+btnGeneralReceipt.addEventListener('click', ()=> generateGeneralReceipt(currentEventId));
+async function generateGeneralReceipt(eventId){
+  if(!eventId) return; const { jsPDF } = window.jspdf; const ev=events.find(e=>e.id===eventId); if(!ev) return;
+  const remito = await nextSeqAny(); const t=computeTotals(ev); const doc=new jsPDF({unit:'mm', format:'a4'}), W=210;
+
+  doc.setLineWidth(0.2); doc.rect(10,10,W-20,277);
+  try{ const imgData=await (async()=>{ const i=new Image(); i.crossOrigin='anonymous'; i.src=document.getElementById('logoPreview').src; await new Promise(r=>i.onload=r); const c=document.createElement('canvas'); c.width=i.width; c.height=i.height; const x=c.getContext('2d'); x.drawImage(i,0,0); return c.toDataURL('image/png');})(); doc.addImage(imgData,'PNG', W-42, 14, 26, 26);}catch(e){}
+  doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.text('RECIBO GENERAL', 18, 24);
+  doc.setFont('helvetica','normal'); doc.setFontSize(11); doc.text('OK EVENTOS — CATERING Y EGRESADOS', 18, 31);
+
+  const y0=40; doc.setFontSize(10);
+  doc.rect(16, y0, 90, 12); doc.text('Nombre del evento', 18, y0+5); doc.setFont('helvetica','bold'); doc.text(doc.splitTextToSize((ev.name||'-'),86), 18, y0+9); doc.setFont('helvetica','normal');
+  doc.rect(108,y0, 30, 12); doc.text('Fecha evento', 110, y0+5); doc.setFont('helvetica','bold'); doc.text(ev.date||'-', 110, y0+9); doc.setFont('helvetica','normal');
+  doc.rect(140,y0, 28, 12); doc.text('Provincia', 142, y0+5); doc.setFont('helvetica','bold'); doc.text(ev.province||'-', 142, y0+9); doc.setFont('helvetica','normal');
+  doc.rect(170,y0, 30, 12); doc.text('Precio opción', 172, y0+5); doc.setFont('helvetica','bold'); doc.text(money(ev.pricePer||0), 172, y0+9); doc.setFont('helvetica','normal');
+
+  const y1=y0+14; doc.rect(16, y1, 90, 12); doc.text('Salón', 18, y1+5); doc.setFont('helvetica','bold'); doc.text(doc.splitTextToSize(ev.salon||'—',86), 18, y1+9); doc.setFont('helvetica','normal');
+  doc.rect(108,y1, 92, 12); doc.text('Opción/Plan', 110, y1+5); doc.setFont('helvetica','bold'); doc.text(doc.splitTextToSize(ev.optionLabel||'—',88), 110, y1+9); doc.setFont('helvetica','normal');
+
+  // Tabla pagos
+  let y = y1+16; const headerH=12, rowH=10;
+  const cols=[ {x:16,w:28,title:'Fecha'},{x:44,w:58,title:'Cliente'},{x:102,w:32,title:'Método'},{x:134,w:30,title:'Monto'},{x:164,w:36,title:'Comprobante'} ];
+  const tableW=cols.reduce((a,c)=>a+c.w,0);
+  doc.setFont('helvetica','bold'); doc.text('Pagos registrados', 16, y); y+=3;
+  doc.rect(16,y,tableW,headerH); cols.forEach(c=>{ doc.rect(c.x,y,c.w,headerH); doc.text(c.title, c.x+2, y+7); }); y+=headerH;
+
+  if(!(ev.payments||[]).length){ doc.rect(16,y,tableW,rowH); doc.text('— Sin pagos —', 18, y+7); y+=rowH; }
+  else{
+    (ev.payments||[]).forEach((p,idx)=>{ const fecha=new Date(p.at).toLocaleDateString('es-AR'); const monto=money(p.amount);
+      doc.rect(16,y,tableW,rowH); cols.forEach(c=> doc.rect(c.x,y,c.w,rowH));
+      doc.setFont('helvetica','normal'); doc.text(fecha, cols[0].x+2, y+7);
+      doc.text((p.client||'Cliente').toString().slice(0,23), cols[1].x+2, y+7);
+      doc.text((p.method||'-'), cols[2].x+2, y+7);
+      doc.text(monto, cols[3].x+2, y+7);
+      doc.text('Abrir', cols[4].x+2, y+7);
+      const rect={x:cols[4].x, y:y, w:cols[4].w, h:rowH};
+      if(isHttp(p.proofUrl)){ doc.link(rect.x,rect.y,rect.w,rect.h,{url:p.proofUrl}); }
+      else if(/^data:image\//i.test(p.proofUrl)){ doc.addPage(); const target=doc.getNumberOfPages(); doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.text(`Comprobante ${idx+1}`,14,18);
+        try{ doc.addImage(p.proofUrl,'JPEG',14,24,180,250,undefined,'FAST'); }catch(e){ doc.setFontSize(11); doc.text('No se pudo incrustar la imagen del comprobante.', 14, 30); }
+        doc.setPage(1); doc.link(rect.x,rect.y,rect.w,rect.h,{pageNumber:target});
+      }else if(/^data:application\/pdf/i.test(p.proofUrl)){ const target = doc.getNumberOfPages()+1; doc.addPage(); doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.text(`Comprobante PDF ${idx+1}`,14,18);
+        doc.setFont('helvetica','normal'); doc.setFontSize(11); doc.textWithLink('Abrir PDF del comprobante', 14, 28, { url: p.proofUrl }); doc.setPage(1); doc.link(rect.x,rect.y,rect.w,rect.h,{pageNumber:target});
+      }
+      y+=rowH; if(y>260){ doc.addPage(); y=20; }
+    });
+  }
+
+  // Totales
+  const TY=y+8; doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.text('Totales del evento', 16, TY);
+  doc.setLineWidth(0.2); doc.rect(16, TY+2, 184, 36);
+  doc.setFont('helvetica','normal'); doc.setFontSize(10);
+  doc.text(`Personas: ${t.people}`, 18, TY+10);
+  doc.text(`Precio cierre por persona (actual): ${money(t.pricePer)}`, 110, TY+10);
+  doc.text(`Total base: ${money(t.base)}`, 18, TY+18);
+  doc.text(`Ajustes: ${money(t.adj)}`, 110, TY+18);
+  doc.text(`Extras/Combos: ${money(t.extrasTotal)}`, 18, TY+26);
+  doc.setFont('helvetica','bold'); doc.text(`TOTAL: ${money(t.total)}`, 110, TY+26);
+  doc.setFont('helvetica','normal'); doc.text(`Abonado: ${money(t.paid)}`, 18, TY+34);
+  doc.setFont('helvetica','bold'); doc.text(`SALDO: ${money(t.remain)}`, 110, TY+34);
+
+  const safe=(ev.name||'evento').replace(/[^\p{L}\p{N}_-]+/gu,'_'); doc.save(`Recibo_General_${remito}_${safe}.pdf`);
+}
+
+/* ===== Eliminar evento ===== */
+async function deleteEventDeep(eventId){
+  if(!confirm('¿Eliminar el evento y TODOS sus datos?')) return;
+  if(isAuthed()) await UCOL('events').doc(eventId).delete();
+  events = events.filter(e=>e.id!==eventId); store.set(K.EVENTS, events);
+  if(currentEventId===eventId){ evPanelBk.style.display='none'; currentEventId=null; }
+  renderEventList(); alert('Evento eliminado ✅');
+}
+</script>
+</body>
+</html>
