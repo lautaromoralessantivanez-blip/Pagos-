@@ -263,7 +263,7 @@ button.ghost{background:#eee;color:#333;box-shadow:none}
 </div>
 
 <!-- ===== AUTH ===== -->
-<div id="authBk">
+<div id="authBk" style="display:none">
   <div id="authCard" class="card">
     <div class="auth-tabs">
       <div class="chip active" data-auth="login">Iniciar sesión</div>
@@ -296,8 +296,9 @@ button.ghost{background:#eee;color:#333;box-shadow:none}
 </div>
 
 <script>
-/* ===== Firebase ===== */
-// ⚠️ Pega tu configuración real aquí:
+/* ============ Firebase SAFE INIT (sin errores si no hay API key) ============ */
+/* 1) Pega tu configuración real aquí. Si la dejas vacía o con “TU_…”, la app
+      queda en modo invitado (local) y NO lanza auth/api-key-not-valid. */
 const FIREBASE_CONFIG = {
   apiKey: "TU_API_KEY",
   authDomain: "TU_AUTH_DOMAIN",
@@ -306,20 +307,108 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "TU_SENDER_ID",
   appId: "TU_APP_ID"
 };
-firebase.initializeApp(FIREBASE_CONFIG);
-const auth = firebase.auth();
-const db   = firebase.firestore();
 
-// Sesión persistente en el mismo dispositivo
-auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+const CLOUD_ENABLED =
+  !!(FIREBASE_CONFIG.apiKey) &&
+  !/^TU_|^YOUR_/i.test(FIREBASE_CONFIG.apiKey);
+
+let auth=null, db=null;
+
+const saveModeEl = document.getElementById('saveMode');
+const whoEl      = document.getElementById('who');
+const btnAuth    = document.getElementById('btnAuth');
+const btnLogout  = document.getElementById('btnLogout');
+const authBk     = document.getElementById('authBk');
+const authMsg    = document.getElementById('authMsg');
+
+const alEmail = document.getElementById('alEmail');
+const alPass  = document.getElementById('alPass');
+const arEmail = document.getElementById('arEmail');
+const arPass  = document.getElementById('arPass');
+
+const doLogin    = document.getElementById('doLogin');
+const doRegister = document.getElementById('doRegister');
+const doGoogle   = document.getElementById('doGoogle');
+const doGuest    = document.getElementById('doGuest');
+
+const SKIP_LOGIN = 'ok_ev_skip_login';
+
+function openAuth(){ authBk.style.display='flex'; }
+function closeAuth(){ authBk.style.display='none'; authMsg.textContent=''; }
+
+if (CLOUD_ENABLED) {
+  // Nube activa
+  firebase.initializeApp(FIREBASE_CONFIG);
+  auth = firebase.auth();
+  db   = firebase.firestore();
+  auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+
+  btnAuth.onclick  = ()=>{ localStorage.removeItem(SKIP_LOGIN); openAuth(); };
+  btnLogout.onclick= ()=> auth.signOut();
+
+  document.getElementById('closeAuth').onclick = closeAuth;
+  document.getElementById('closeAuth2').onclick = closeAuth;
+
+  document.querySelectorAll('.auth-tabs .chip').forEach(ch=>{
+    ch.onclick=()=>{
+      const which=ch.dataset.auth;
+      document.querySelectorAll('.auth-tabs .chip').forEach(x=>x.classList.toggle('active',x===ch));
+      document.getElementById('authLogin').style.display=which==='login'?'block':'none';
+      document.getElementById('authReg').style.display  =which==='register'?'block':'none';
+      authMsg.textContent='';
+    };
+  });
+
+  doLogin.onclick=async()=>{
+    try{
+      await auth.signInWithEmailAndPassword(alEmail.value.trim(), alPass.value);
+      closeAuth();
+    }catch(e){ authMsg.textContent=e.message; }
+  };
+  doRegister.onclick=async()=>{
+    try{
+      await auth.createUserWithEmailAndPassword(arEmail.value.trim(), arPass.value);
+      closeAuth();
+    }catch(e){ authMsg.textContent=e.message; }
+  };
+  doGoogle.onclick=async()=>{
+    try{
+      await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
+      closeAuth();
+    }catch(e){ authMsg.textContent=e.message; }
+  };
+  doGuest.onclick=()=>{ localStorage.setItem(SKIP_LOGIN,'1'); closeAuth(); };
+
+  document.addEventListener('DOMContentLoaded', ()=>{
+    if(!auth.currentUser && !localStorage.getItem(SKIP_LOGIN)) openAuth();
+  });
+
+} else {
+  // Modo invitado sin errores
+  console.warn('Firebase desactivado → modo invitado (localStorage).');
+  auth = {
+    currentUser: null,
+    onAuthStateChanged: (cb)=> cb(null),
+    signOut: async()=>{}
+  };
+  db = null;
+  saveModeEl.textContent = 'Modo invitado (local)';
+  whoEl.textContent = '—';
+  btnAuth.style.display = 'none';
+  btnLogout.style.display = 'none';
+  authBk.style.display = 'none';
+  localStorage.setItem(SKIP_LOGIN,'1');
+}
+
+const isAuthed = ()=> !!(auth && auth.currentUser && auth.currentUser.uid);
+const UCOL = (path)=> db.collection('users').doc(auth.currentUser.uid).collection(path);
+/* =========================================================================== */
 
 /* ===== Utilidades ===== */
 const money = n => '$ ' + Number(n||0).toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2});
 const num = (v)=>{ const s=(''+(v??'')).replace(/\./g,'').replace(',', '.').replace(/[^\d.-]/g,''); const n=parseFloat(s); return isNaN(n)?0:n; };
 const isHttp = (u)=> u && /^https?:\/\//i.test(u);
 const uid = ()=>'id_'+Math.random().toString(36).slice(2)+Date.now();
-const isAuthed = ()=> !!(auth.currentUser && auth.currentUser.uid);
-const UCOL = (path)=> db.collection('users').doc(auth.currentUser.uid).collection(path);
 
 /* ===== Storage local (modo invitado) ===== */
 const K = { EVENTS:'ok_ev_events', EXTRAS:'ok_ev_extras', MEDIA:'ok_ev_media', PAYSEQ:'ok_ev_payseq', LOGO:'ok_logo' };
@@ -372,18 +461,12 @@ let paySeqLocal = store.get(K.PAYSEQ, 0);
 function nextSeqLocal(){ paySeqLocal++; store.set(K.PAYSEQ, paySeqLocal); return String(paySeqLocal).padStart(12,'0'); }
 
 /* ===== AUTH UI Refs ===== */
-const saveMode = document.getElementById('saveMode'); const who = document.getElementById('who');
-const btnAuth = document.getElementById('btnAuth'); const btnLogout = document.getElementById('btnLogout');
-const authBk = document.getElementById('authBk'); const authMsg = document.getElementById('authMsg');
-const alEmail = document.getElementById('alEmail'), alPass = document.getElementById('alPass');
-const arEmail = document.getElementById('arEmail'), arPass = document.getElementById('arPass');
-const doLogin = document.getElementById('doLogin'), doRegister=document.getElementById('doRegister'), doGoogle=document.getElementById('doGoogle'), doGuest=document.getElementById('doGuest');
+const who = document.getElementById('who');
+const btnAuthUI = document.getElementById('btnAuth');
+const btnLogoutUI = document.getElementById('btnLogout');
+const authBkUI = document.getElementById('authBk');
+const authMsgUI = document.getElementById('authMsg');
 
-function openAuth()  { authBk.style.display='flex'; }
-function closeAuth() { authBk.style.display='none'; authMsg.textContent=''; }
-
-/* ===== Invitado recordado ===== */
-const SKIP_LOGIN = 'ok_ev_skip_login';
 document.getElementById('btnAuth').onclick=()=>{ localStorage.removeItem(SKIP_LOGIN); openAuth(); };
 document.getElementById('btnLogout').onclick=()=> auth.signOut();
 document.getElementById('closeAuth').onclick=closeAuth;
@@ -397,14 +480,21 @@ function switchAuthTab(which){
   authMsg.textContent='';
 }
 
-doLogin.onclick = async ()=>{ try{ await auth.signInWithEmailAndPassword(alEmail.value.trim(), alPass.value); closeAuth(); }catch(e){ authMsg.textContent=e.message; } };
-doRegister.onclick = async ()=>{ try{ await auth.createUserWithEmailAndPassword(arEmail.value.trim(), arPass.value); closeAuth(); }catch(e){ authMsg.textContent=e.message; } };
-doGoogle.onclick = async ()=>{ try{ await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); closeAuth(); }catch(e){ authMsg.textContent=e.message; } };
-doGuest.onclick = ()=>{ localStorage.setItem(SKIP_LOGIN,'1'); closeAuth(); };
+const doLoginBtn = document.getElementById('doLogin');
+const doRegisterBtn = document.getElementById('doRegister');
+const doGoogleBtn = document.getElementById('doGoogle');
+const doGuestBtn = document.getElementById('doGuest');
+
+if (CLOUD_ENABLED) {
+  doLoginBtn.onclick = async ()=>{ try{ await auth.signInWithEmailAndPassword(alEmail.value.trim(), alPass.value); closeAuth(); }catch(e){ authMsg.textContent=e.message; } };
+  doRegisterBtn.onclick = async ()=>{ try{ await auth.createUserWithEmailAndPassword(arEmail.value.trim(), arPass.value); closeAuth(); }catch(e){ authMsg.textContent=e.message; } };
+  doGoogleBtn.onclick = async ()=>{ try{ await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); closeAuth(); }catch(e){ authMsg.textContent=e.message; } };
+  doGuestBtn.onclick  = ()=>{ localStorage.setItem(SKIP_LOGIN,'1'); closeAuth(); };
+}
 
 /* ===== Mostrar modal al inicio (si aplica) ===== */
 document.addEventListener('DOMContentLoaded', ()=>{
-  const mustShow = !auth.currentUser && !localStorage.getItem(SKIP_LOGIN);
+  const mustShow = CLOUD_ENABLED && !auth.currentUser && !localStorage.getItem(SKIP_LOGIN);
   if(mustShow) openAuth();
 });
 
@@ -413,7 +503,7 @@ let unsubEvents=null, unsubExtras=null, unsubMedia=null;
 auth.onAuthStateChanged(async (user)=>{
   if(user){
     who.textContent = user.email||user.uid;
-    saveMode.textContent = 'Guardado en la cuenta (nube)';
+    saveModeEl.textContent = 'Guardado en la cuenta (nube)';
     btnAuth.style.display='none'; btnLogout.style.display='inline-block';
     localStorage.removeItem(SKIP_LOGIN);
 
@@ -443,7 +533,7 @@ auth.onAuthStateChanged(async (user)=>{
 
   }else{
     who.textContent='—';
-    saveMode.textContent='Modo invitado (local)';
+    saveModeEl.textContent='Modo invitado (local)';
     btnAuth.style.display='inline-block'; btnLogout.style.display='none';
     if(unsubEvents) unsubEvents(); if(unsubExtras) unsubExtras(); if(unsubMedia) unsubMedia();
 
@@ -451,13 +541,13 @@ auth.onAuthStateChanged(async (user)=>{
     events = store.get(K.EVENTS, events);
     mediaMap = store.get(K.MEDIA, mediaMap);
 
-    if(!localStorage.getItem(SKIP_LOGIN)) openAuth();
+    if(CLOUD_ENABLED && !localStorage.getItem(SKIP_LOGIN)) openAuth();
 
     renderEventList(); fillCatalogSelects(); renderCatalog();
   }
 });
 
-/* ===== Refs resto UI ===== */
+/* ===== Resto de refs UI ===== */
 const evForm = document.getElementById('evForm');
 const evType = document.getElementById('evType');
 const evName = document.getElementById('evName');
@@ -562,7 +652,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
 /* ===== Helpers ===== */
 function fillCatalogSelects(){
   function fill(sel){
-    sel.innerHTML=''; const g1=document.createElement('optgroup'); g1.label='Extras'; const g2=document.createElement('optgroup'); g2.label='Combos';
+    sel.innerHTML='';
+    const g1=document.createElement('optgroup'); g1.label='Extras';
+    const g2=document.createElement('optgroup'); g2.label='Combos';
     extras.filter(x=>x.type==='extra').forEach(it=>{ const o=document.createElement('option'); o.value=it.id; o.textContent=`${it.name} — ${money(it.price)}`; g1.appendChild(o); });
     extras.filter(x=>x.type==='combo').forEach(it=>{ const o=document.createElement('option'); o.value=it.id; o.textContent=`${it.name} — ${money(it.price)}`; g2.appendChild(o); });
     sel.appendChild(g1); sel.appendChild(g2);
